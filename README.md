@@ -1,8 +1,56 @@
-# Welcome to your Lovable project
+
+# Website Scanner Tool
 
 ## Project info
 
+A Python utility for scanning websites and extracting contact information from CSV data.
+
 **URL**: https://lovable.dev/projects/152e5d30-ca47-4366-9fcd-9629697ced69
+
+## Features
+
+- Website status checking (working/not working)
+- Extracts emails, phone numbers, LinkedIn links, and Instagram links
+- Processes large CSV files efficiently using multithreading
+- Detailed logging for troubleshooting
+
+## Requirements
+
+```
+pip install requests beautifulsoup4 tqdm
+```
+
+## How to Use
+
+1. Save the script as `website_scanner.py`
+2. Prepare your CSV file with at least a "Website URL" column
+3. Run the script:
+   ```
+   python website_scanner.py input.csv -o output.csv -w 10 -p 5
+   ```
+
+### Parameters
+
+- `input.csv`: Your input CSV file path
+- `-o, --output`: Output CSV file path (default: processed_input.csv)
+- `-w, --workers`: Number of worker threads (default: 10)
+- `-p, --pages`: Maximum pages to scan per website (default: 5)
+
+## Example
+
+```
+python website_scanner.py websites.csv --output results.csv --workers 20 --pages 10
+```
+
+## Output
+
+The script adds the following columns to your CSV:
+- Status: "Working" or "Not working"
+- Error: Error message if website couldn't be accessed
+- Email: Extracted email addresses
+- Phone: Extracted phone numbers
+- LinkedIn: LinkedIn profile links
+- Instagram: Instagram profile links
 
 ## How can I edit this code?
 
@@ -52,7 +100,7 @@ npm run dev
 
 ## What technologies are used for this project?
 
-This project is built with .
+This project is built with:
 
 - Vite
 - TypeScript
