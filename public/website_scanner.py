@@ -1,4 +1,3 @@
-
 import csv
 import requests
 import re
@@ -35,17 +34,42 @@ class WebsiteChecker:
         if not url or not isinstance(url, str):
             return False, "Invalid URL"
             
-        # Ensure URL has a scheme
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-            
-        try:
-            response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
-            if response.status_code >= 400:
-                return False, f"Error {response.status_code}"
-            return True, response
-        except requests.RequestException as e:
-            return False, str(e)
+        # Try both https and http if necessary
+        error_message = None
+        for scheme in ['https://', 'http://']:
+            # Skip if URL already has this scheme
+            if url.startswith(scheme):
+                formatted_url = url
+            elif url.startswith(('http://', 'https://')):
+                # If URL already has a different scheme, skip to next iteration
+                continue
+            else:
+                formatted_url = scheme + url
+                
+            try:
+                logger.info(f"Trying to connect to {formatted_url}")
+                response = self.session.get(formatted_url, timeout=self.timeout, allow_redirects=True)
+                
+                # Check if the site has content
+                has_content = len(response.text) > 100  # Simple heuristic to check for content
+                
+                # Classify 404 or empty content as not working
+                if response.status_code == 404 or not has_content:
+                    error_message = f"Error {response.status_code}" if response.status_code == 404 else "No content found"
+                    logger.warning(f"{formatted_url}: {error_message}")
+                    continue
+                
+                # Otherwise, consider it working
+                logger.info(f"Successfully connected to {formatted_url}")
+                return True, response
+                
+            except requests.RequestException as e:
+                error_message = str(e)
+                logger.warning(f"Failed to connect to {formatted_url}: {error_message}")
+                continue
+                
+        # If we've tried both schemes and neither worked, return the last error
+        return False, error_message or "Unable to connect"
 
 class WebsiteScraper:
     def __init__(self, max_pages=5, timeout=30):
@@ -216,7 +240,7 @@ class CSVProcessor:
                     
             if not url:
                 logger.warning(f"No URL found in row: {row}")
-                row['Status'] = 'No URL provided'
+                row['Status'] = 'Not Working'
                 row['Error'] = 'Missing URL in input'
                 row['Email'] = ''
                 row['Phone'] = ''
@@ -231,7 +255,7 @@ class CSVProcessor:
             
             if not is_accessible:
                 logger.warning(f"Website not accessible: {url} - {response}")
-                row['Status'] = 'Not working'
+                row['Status'] = 'Not Working'
                 row['Error'] = str(response)
                 row['Email'] = ''
                 row['Phone'] = ''
@@ -244,8 +268,11 @@ class CSVProcessor:
             row['Status'] = 'Working'
             row['Error'] = ''
             
+            # Get the actual working URL (that may include http or https)
+            working_url = response.url
+            
             # Scrape website
-            scrape_results = self.website_scraper.scrape_website(url)
+            scrape_results = self.website_scraper.scrape_website(working_url)
             
             # Update row with scraped information
             row['Email'] = '; '.join(scrape_results['email']) if scrape_results['email'] else ''
@@ -259,7 +286,7 @@ class CSVProcessor:
             
         except Exception as e:
             logger.error(f"Error processing row: {str(e)}", exc_info=True)
-            row['Status'] = 'Error'
+            row['Status'] = 'Not Working'
             row['Error'] = str(e)
             row['Email'] = ''
             row['Phone'] = ''
