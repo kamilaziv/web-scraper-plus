@@ -1,4 +1,3 @@
-
 import csv
 import requests
 import re
@@ -193,7 +192,13 @@ class CSVProcessor:
     def process_row(self, row):
         """Process a single row from the CSV"""
         try:
-            url = row.get('Website URL', '')
+            # Check both "Website URL" and "website url" (case insensitive)
+            url = None
+            for key in row:
+                if key.lower() == "website url":
+                    url = row[key]
+                    break
+                    
             if not url:
                 row['Status'] = 'No URL provided'
                 return row
@@ -229,11 +234,43 @@ class CSVProcessor:
     def process_csv(self):
         """Process the entire CSV file"""
         try:
+            # Check if input file exists
+            if not os.path.exists(self.input_file):
+                logger.error(f"Input file {self.input_file} does not exist")
+                return False
+                
             # Read the input CSV file
-            with open(self.input_file, 'r', newline='', encoding='utf-8-sig') as csvfile:
-                reader = csv.DictReader(csvfile)
-                fieldnames = reader.fieldnames + ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
-                rows = list(reader)
+            try:
+                with open(self.input_file, 'r', newline='', encoding='utf-8-sig') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    
+                    # Check if the file has any rows
+                    rows = list(reader)
+                    if not rows:
+                        logger.error(f"Input file {self.input_file} is empty or has no data rows")
+                        return False
+                        
+                    # Check if required columns exist (case insensitive check)
+                    has_url_column = False
+                    for field in reader.fieldnames:
+                        if field.lower() == "website url":
+                            has_url_column = True
+                            break
+                            
+                    if not has_url_column:
+                        logger.warning(f"Input file {self.input_file} doesn't have a 'Website URL' column. "
+                                      f"Available columns: {reader.fieldnames}")
+                        
+                    # Add required output columns if they don't exist
+                    fieldnames = list(reader.fieldnames)
+                    required_columns = ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
+                    for col in required_columns:
+                        if col not in fieldnames:
+                            fieldnames.append(col)
+                
+            except Exception as e:
+                logger.error(f"Error reading CSV file {self.input_file}: {str(e)}")
+                return False
                 
             logger.info(f"Processing {len(rows)} rows from {self.input_file}")
             
