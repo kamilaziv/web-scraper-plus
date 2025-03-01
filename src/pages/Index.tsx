@@ -433,7 +433,7 @@ The script adds the following columns to your CSV:
               </div>
             </div>
           </div>
-        </CardHeader>
+        </Tabs>
       </Card>
       
       <div className="mt-8 max-w-4xl mx-auto">
