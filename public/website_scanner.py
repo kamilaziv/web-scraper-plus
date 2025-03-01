@@ -1,3 +1,4 @@
+
 import csv
 import requests
 import re
@@ -122,6 +123,8 @@ class WebsiteScraper:
         visited_urls = set()
         urls_to_visit = [url]
         
+        logger.info(f"Starting to scrape {url}")
+        
         try:
             domain = urlparse(url).netloc
             
@@ -135,26 +138,37 @@ class WebsiteScraper:
                     
                 visited_urls.add(current_url)
                 
+                logger.info(f"Visiting {current_url}")
+                
                 try:
                     response = self.session.get(current_url, timeout=self.timeout)
                     if response.status_code >= 400:
+                        logger.warning(f"Error {response.status_code} for {current_url}")
                         continue
                         
                     soup = BeautifulSoup(response.text, 'html.parser')
                     
                     # Extract emails from the page text
                     emails = self.extract_emails(response.text)
+                    if emails:
+                        logger.info(f"Found emails: {emails}")
                     results['email'].extend(emails)
                     
                     # Extract phone numbers from the page text
                     phones = self.extract_phones(response.text)
+                    if phones:
+                        logger.info(f"Found phones: {phones}")
                     results['phone'].extend(phones)
                     
                     # Extract LinkedIn and Instagram links
                     linkedin_links = self.extract_social_links(soup, current_url, 'linkedin')
+                    if linkedin_links:
+                        logger.info(f"Found LinkedIn: {linkedin_links}")
                     results['linkedin'].extend(linkedin_links)
                     
                     instagram_links = self.extract_social_links(soup, current_url, 'instagram')
+                    if instagram_links:
+                        logger.info(f"Found Instagram: {instagram_links}")
                     results['instagram'].extend(instagram_links)
                     
                     # Find more internal links to visit
@@ -164,7 +178,7 @@ class WebsiteScraper:
                             full_url = urljoin(current_url, href)
                             
                             # Only follow links within the same domain
-                            if urlparse(full_url).netloc == domain and full_url not in visited_urls:
+                            if urlparse(full_url).netloc == domain and full_url not in visited_urls and full_url not in urls_to_visit:
                                 urls_to_visit.append(full_url)
                                 
                 except Exception as e:
@@ -175,6 +189,7 @@ class WebsiteScraper:
             for key in results:
                 results[key] = list(set(results[key]))
                 
+            logger.info(f"Finished scraping {url}. Results: {results}")
             return results
             
         except Exception as e:
@@ -182,7 +197,7 @@ class WebsiteScraper:
             return results
 
 class CSVProcessor:
-    def __init__(self, input_file, output_file=None, max_workers=10):
+    def __init__(self, input_file, output_file=None, max_workers=5):
         self.input_file = input_file
         self.output_file = output_file or f"processed_{os.path.basename(input_file)}"
         self.max_workers = max_workers
@@ -195,24 +210,39 @@ class CSVProcessor:
             # Check both "Website URL" and "website url" (case insensitive)
             url = None
             for key in row:
-                if key.lower() == "website url":
+                if key and key.lower() == "website url":
                     url = row[key]
                     break
                     
             if not url:
+                logger.warning(f"No URL found in row: {row}")
                 row['Status'] = 'No URL provided'
+                row['Error'] = 'Missing URL in input'
+                row['Email'] = ''
+                row['Phone'] = ''
+                row['LinkedIn'] = ''
+                row['Instagram'] = ''
                 return row
                 
+            logger.info(f"Processing URL: {url}")
+            
             # Check if website is accessible
             is_accessible, response = self.website_checker.check_website(url)
             
             if not is_accessible:
+                logger.warning(f"Website not accessible: {url} - {response}")
                 row['Status'] = 'Not working'
                 row['Error'] = str(response)
+                row['Email'] = ''
+                row['Phone'] = ''
+                row['LinkedIn'] = ''
+                row['Instagram'] = ''
                 return row
                 
             # Website is accessible, scrape for information
+            logger.info(f"Website accessible: {url}")
             row['Status'] = 'Working'
+            row['Error'] = ''
             
             # Scrape website
             scrape_results = self.website_scraper.scrape_website(url)
@@ -223,12 +253,18 @@ class CSVProcessor:
             row['LinkedIn'] = '; '.join(scrape_results['linkedin']) if scrape_results['linkedin'] else ''
             row['Instagram'] = '; '.join(scrape_results['instagram']) if scrape_results['instagram'] else ''
             
+            logger.info(f"Processed {url}: Email={row['Email']}, Phone={row['Phone']}, LinkedIn={row['LinkedIn']}, Instagram={row['Instagram']}")
+            
             return row
             
         except Exception as e:
-            logger.error(f"Error processing row: {str(e)}")
+            logger.error(f"Error processing row: {str(e)}", exc_info=True)
             row['Status'] = 'Error'
             row['Error'] = str(e)
+            row['Email'] = ''
+            row['Phone'] = ''
+            row['LinkedIn'] = ''
+            row['Instagram'] = ''
             return row
             
     def process_csv(self):
@@ -240,39 +276,49 @@ class CSVProcessor:
                 return False
                 
             # Read the input CSV file
+            rows = []
+            fieldnames = []
             try:
                 with open(self.input_file, 'r', newline='', encoding='utf-8-sig') as csvfile:
                     reader = csv.DictReader(csvfile)
+                    fieldnames = list(reader.fieldnames) if reader.fieldnames else []
                     
-                    # Check if the file has any rows
-                    rows = list(reader)
-                    if not rows:
-                        logger.error(f"Input file {self.input_file} is empty or has no data rows")
+                    # Check if the file has any column headers
+                    if not fieldnames:
+                        logger.error(f"Input file {self.input_file} has no column headers")
                         return False
                         
                     # Check if required columns exist (case insensitive check)
                     has_url_column = False
-                    for field in reader.fieldnames:
-                        if field.lower() == "website url":
+                    for field in fieldnames:
+                        if field and field.lower() == "website url":
                             has_url_column = True
                             break
                             
                     if not has_url_column:
                         logger.warning(f"Input file {self.input_file} doesn't have a 'Website URL' column. "
-                                      f"Available columns: {reader.fieldnames}")
+                                      f"Available columns: {fieldnames}")
                         
-                    # Add required output columns if they don't exist
-                    fieldnames = list(reader.fieldnames)
-                    required_columns = ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
-                    for col in required_columns:
-                        if col not in fieldnames:
-                            fieldnames.append(col)
-                
+                    # Read all rows
+                    rows = list(reader)
+                    
+                    # Check if the file has any rows
+                    if not rows:
+                        logger.error(f"Input file {self.input_file} is empty or has no data rows")
+                        return False
+                    
             except Exception as e:
-                logger.error(f"Error reading CSV file {self.input_file}: {str(e)}")
+                logger.error(f"Error reading CSV file {self.input_file}: {str(e)}", exc_info=True)
                 return False
                 
+            # Add required output columns if they don't exist
+            required_columns = ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
+            for col in required_columns:
+                if col not in fieldnames:
+                    fieldnames.append(col)
+            
             logger.info(f"Processing {len(rows)} rows from {self.input_file}")
+            logger.info(f"Columns: {fieldnames}")
             
             # Process rows with progress bar
             processed_rows = []
@@ -286,7 +332,7 @@ class CSVProcessor:
                         processed_row = future.result()
                         processed_rows.append(processed_row)
                     except Exception as e:
-                        logger.error(f"Error in thread: {str(e)}")
+                        logger.error(f"Error in thread: {str(e)}", exc_info=True)
                         
             # Write the output CSV file
             with open(self.output_file, 'w', newline='', encoding='utf-8-sig') as csvfile:
@@ -298,14 +344,14 @@ class CSVProcessor:
             return True
             
         except Exception as e:
-            logger.error(f"Error processing CSV: {str(e)}")
+            logger.error(f"Error processing CSV: {str(e)}", exc_info=True)
             return False
 
 def main():
     parser = argparse.ArgumentParser(description='Website scanner for CSV files')
     parser.add_argument('input_file', help='Input CSV file path')
     parser.add_argument('-o', '--output', help='Output CSV file path')
-    parser.add_argument('-w', '--workers', type=int, default=10, help='Number of worker threads')
+    parser.add_argument('-w', '--workers', type=int, default=5, help='Number of worker threads')
     parser.add_argument('-p', '--pages', type=int, default=5, help='Maximum pages to scan per website')
     
     args = parser.parse_args()
