@@ -1,4 +1,3 @@
-
 import csv
 import requests
 import re
@@ -220,14 +219,17 @@ class CSVProcessor:
     def process_row(self, row):
         """Process a single row from the CSV"""
         try:
-            # Check both "Website URL" and "website url" (case insensitive)
+            # Check for website URL using case-insensitive matching and different formats
             url = None
             for key in row:
-                if key and key.lower() == "website url":
+                if key and (key.lower() == "website url" or key.lower() == "website_url" or 
+                           key.lower() == "websiteurl" or key.lower() == "url" or 
+                           key.lower() == "website"):
                     url = row[key]
-                    break
+                    if url and url.strip():  # Ensure URL is not empty or just whitespace
+                        break
                     
-            if not url:
+            if not url or not url.strip():
                 logger.warning(f"No URL found in row: {row}")
                 row['Status'] = 'No URL provided'
                 row['Error'] = 'Missing URL in input'
@@ -238,6 +240,8 @@ class CSVProcessor:
                 row['WhatsApp'] = ''
                 return row
                 
+            # Clean the URL by stripping whitespace
+            url = url.strip()
             logger.info(f"Processing URL: {url}")
             
             # Check if website is accessible
