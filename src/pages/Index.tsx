@@ -11,7 +11,6 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("code");
   
   const handleDownload = () => {
-    // Create a link to the Python file in the public directory
     const link = document.createElement("a");
     link.href = "/website_scanner.py";
     link.download = "website_scanner.py";
@@ -142,7 +141,8 @@ class WebsiteScraper:
             'email': [],
             'phone': [],
             'linkedin': [],
-            'instagram': []
+            'instagram': [],
+            'whatsapp': []
         }
         
         visited_urls = set()
@@ -242,6 +242,7 @@ class CSVProcessor:
             row['Phone'] = '; '.join(scrape_results['phone']) if scrape_results['phone'] else ''
             row['LinkedIn'] = '; '.join(scrape_results['linkedin']) if scrape_results['linkedin'] else ''
             row['Instagram'] = '; '.join(scrape_results['instagram']) if scrape_results['instagram'] else ''
+            row['WhatsApp'] = '; '.join(scrape_results['whatsapp']) if scrape_results['whatsapp'] else ''
             
             return row
             
@@ -257,7 +258,7 @@ class CSVProcessor:
             # Read the input CSV file
             with open(self.input_file, 'r', newline='', encoding='utf-8-sig') as csvfile:
                 reader = csv.DictReader(csvfile)
-                fieldnames = reader.fieldnames + ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
+                fieldnames = reader.fieldnames + ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram', 'WhatsApp']
                 rows = list(reader)
                 
             logger.info(f"Processing {len(rows)} rows from {self.input_file}")
@@ -327,7 +328,7 @@ This Python script scans websites listed in a CSV file, checks if they're workin
 
 ### Features:
 - Website status checking (working/not working)
-- Extracts emails, phone numbers, LinkedIn links, and Instagram links
+- Extracts emails, phone numbers, LinkedIn links, Instagram links, and WhatsApp links
 - Processes large CSV files efficiently using multithreading
 - Detailed logging for troubleshooting
 
@@ -347,7 +348,7 @@ pip install requests beautifulsoup4 tqdm
 ### Parameters:
 - \`input.csv\`: Your input CSV file path
 - \`-o, --output\`: Output CSV file path (default: processed_input.csv)
-- \`-w, --workers\`: Number of worker threads (default: 10)
+- \`-w, --workers\`: Number of worker threads (default: 5)
 - \`-p, --pages\`: Maximum pages to scan per website (default: 5)
 
 ### Example:
@@ -363,6 +364,7 @@ The script adds the following columns to your CSV:
 - Phone: Extracted phone numbers
 - LinkedIn: LinkedIn profile links
 - Instagram: Instagram profile links
+- WhatsApp: WhatsApp contact links
   `;
 
   return (
