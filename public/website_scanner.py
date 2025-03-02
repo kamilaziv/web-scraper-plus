@@ -216,12 +216,38 @@ class CSVProcessor:
         self.max_workers = max_workers
         self.website_checker = WebsiteChecker()
         self.website_scraper = WebsiteScraper()
+        self.url_column = None
+        
+    def find_url_column(self, fieldnames):
+        """Find the column containing website URLs"""
+        possible_names = ['website url', 'website_url', 'websiteurl', 'url', 'website', 'domain', 'site']
+        
+        # First try exact match
+        for name in fieldnames:
+            if name.lower() in possible_names:
+                logger.info(f"Found URL column: {name}")
+                return name
+                
+        # Try partial match
+        for name in fieldnames:
+            for possible in possible_names:
+                if possible in name.lower():
+                    logger.info(f"Found URL column (partial match): {name}")
+                    return name
+                    
+        # Return the first column as fallback
+        if fieldnames:
+            logger.warning(f"Could not identify URL column. Using first column: {fieldnames[0]}")
+            return fieldnames[0]
+            
+        return None
         
     def process_row(self, row):
         """Process a single row from the CSV"""
         try:
-            # Get the URL from the "Website URL" column
-            url = row.get('Website URL', '')
+            # Get URL from the identified URL column
+            url = row.get(self.url_column, '').strip() if self.url_column else ''
+            
             if not url:
                 logger.warning(f"No URL found in row: {row}")
                 row['Status'] = 'No URL provided'
@@ -299,6 +325,12 @@ class CSVProcessor:
                     if not fieldnames:
                         logger.error(f"Input file {self.input_file} has no column headers")
                         return False
+                    
+                    # Identify the URL column
+                    self.url_column = self.find_url_column(fieldnames)
+                    if not self.url_column:
+                        logger.error(f"Could not find URL column in {fieldnames}")
+                        return False
                         
                     # Read all rows
                     rows = list(reader)
@@ -320,6 +352,7 @@ class CSVProcessor:
             
             logger.info(f"Processing {len(rows)} rows from {self.input_file}")
             logger.info(f"Columns: {fieldnames}")
+            logger.info(f"URL column identified as: {self.url_column}")
             
             # Process rows with progress bar
             processed_rows = []

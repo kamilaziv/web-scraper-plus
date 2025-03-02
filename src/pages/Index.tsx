@@ -31,6 +31,7 @@ import logging
 import os
 import time
 import concurrent.futures
+import argparse
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from tqdm import tqdm
@@ -82,7 +83,7 @@ class WebsiteScraper:
         
     def extract_emails(self, text):
         """Extract emails from text using regex"""
-        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
         emails = re.findall(email_pattern, text)
         return list(set(emails))  # Remove duplicates
         
@@ -110,13 +111,19 @@ class WebsiteScraper:
         
         if platform == 'linkedin':
             patterns = [
-                r'linkedin\.com\/company\/[a-zA-Z0-9._-]+',
-                r'linkedin\.com\/in\/[a-zA-Z0-9._-]+'
+                r'linkedin\\.com\\/company\\/[a-zA-Z0-9._-]+',
+                r'linkedin\\.com\\/in\\/[a-zA-Z0-9._-]+'
             ]
         elif platform == 'instagram':
             patterns = [
-                r'instagram\.com\/[a-zA-Z0-9._-]+',
-                r'instagr\.am\/[a-zA-Z0-9._-]+'
+                r'instagram\\.com\\/[a-zA-Z0-9._-]+',
+                r'instagr\\.am\\/[a-zA-Z0-9._-]+'
+            ]
+        elif platform == 'whatsapp':
+            patterns = [
+                r'wa\\.me\\/[0-9]+',
+                r'api\\.whatsapp\\.com\\/send\\?phone=[0-9]+',
+                r'web\\.whatsapp\\.com\\/send\\?phone=[0-9]+'
             ]
         else:
             return []
@@ -183,6 +190,10 @@ class WebsiteScraper:
                     instagram_links = self.extract_social_links(soup, current_url, 'instagram')
                     results['instagram'].extend(instagram_links)
                     
+                    # Extract WhatsApp links
+                    whatsapp_links = self.extract_social_links(soup, current_url, 'whatsapp')
+                    results['whatsapp'].extend(whatsapp_links)
+                    
                     # Find more internal links to visit
                     if len(visited_urls) < self.max_pages:
                         for a_tag in soup.find_all('a', href=True):
@@ -208,19 +219,44 @@ class WebsiteScraper:
             return results
 
 class CSVProcessor:
-    def __init__(self, input_file, output_file=None, max_workers=10):
+    def __init__(self, input_file, output_file=None, max_workers=5):
         self.input_file = input_file
         self.output_file = output_file or f"processed_{os.path.basename(input_file)}"
         self.max_workers = max_workers
         self.website_checker = WebsiteChecker()
         self.website_scraper = WebsiteScraper()
+        self.url_column = None
+        
+    def find_url_column(self, fieldnames):
+        """Find the column containing website URLs"""
+        possible_names = ['website url', 'website_url', 'websiteurl', 'url', 'website', 'domain', 'site']
+        
+        # First try exact match
+        for name in fieldnames:
+            if name.lower() in possible_names:
+                return name
+                
+        # Try partial match
+        for name in fieldnames:
+            for possible in possible_names:
+                if possible in name.lower():
+                    return name
+                    
+        # Return the first column as fallback
+        if fieldnames:
+            return fieldnames[0]
+            
+        return None
         
     def process_row(self, row):
         """Process a single row from the CSV"""
         try:
-            url = row.get('Website URL', '')
+            # Get URL from the identified URL column
+            url = row.get(self.url_column, '').strip() if self.url_column else ''
+            
             if not url:
                 row['Status'] = 'No URL provided'
+                row['Error'] = 'Missing URL in input'
                 return row
                 
             # Check if website is accessible
@@ -258,10 +294,19 @@ class CSVProcessor:
             # Read the input CSV file
             with open(self.input_file, 'r', newline='', encoding='utf-8-sig') as csvfile:
                 reader = csv.DictReader(csvfile)
-                fieldnames = reader.fieldnames + ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram', 'WhatsApp']
+                fieldnames = reader.fieldnames
+                
+                # Identify the URL column
+                self.url_column = self.find_url_column(fieldnames)
+                
+                # Add required columns to output
+                output_fields = fieldnames + ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram', 'WhatsApp']
+                
+                # Read all rows
                 rows = list(reader)
                 
             logger.info(f"Processing {len(rows)} rows from {self.input_file}")
+            logger.info(f"URL column identified as: {self.url_column}")
             
             # Process rows with progress bar
             processed_rows = []
@@ -279,7 +324,7 @@ class CSVProcessor:
                         
             # Write the output CSV file
             with open(self.output_file, 'w', newline='', encoding='utf-8-sig') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer = csv.DictWriter(csvfile, fieldnames=output_fields)
                 writer.writeheader()
                 writer.writerows(processed_rows)
                 
@@ -296,7 +341,7 @@ def main():
     parser = argparse.ArgumentParser(description='Website scanner for CSV files')
     parser.add_argument('input_file', help='Input CSV file path')
     parser.add_argument('-o', '--output', help='Output CSV file path')
-    parser.add_argument('-w', '--workers', type=int, default=10, help='Number of worker threads')
+    parser.add_argument('-w', '--workers', type=int, default=5, help='Number of worker threads')
     parser.add_argument('-p', '--pages', type=int, default=5, help='Maximum pages to scan per website')
     
     args = parser.parse_args()
