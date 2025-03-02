@@ -94,6 +94,12 @@ class WebsiteScraper:
                 r'instagram\.com\/[a-zA-Z0-9._-]+',
                 r'instagr\.am\/[a-zA-Z0-9._-]+'
             ]
+        elif platform == 'whatsapp':
+            patterns = [
+                r'wa\.me\/[0-9]+',
+                r'api\.whatsapp\.com\/send\?phone=[0-9]+',
+                r'web\.whatsapp\.com\/send\?phone=[0-9]+'
+            ]
         else:
             return []
             
@@ -117,7 +123,8 @@ class WebsiteScraper:
             'email': [],
             'phone': [],
             'linkedin': [],
-            'instagram': []
+            'instagram': [],
+            'whatsapp': []
         }
         
         visited_urls = set()
@@ -171,6 +178,12 @@ class WebsiteScraper:
                         logger.info(f"Found Instagram: {instagram_links}")
                     results['instagram'].extend(instagram_links)
                     
+                    # Extract WhatsApp links
+                    whatsapp_links = self.extract_social_links(soup, current_url, 'whatsapp')
+                    if whatsapp_links:
+                        logger.info(f"Found WhatsApp: {whatsapp_links}")
+                    results['whatsapp'].extend(whatsapp_links)
+                    
                     # Find more internal links to visit
                     if len(visited_urls) < self.max_pages:
                         for a_tag in soup.find_all('a', href=True):
@@ -222,6 +235,7 @@ class CSVProcessor:
                 row['Phone'] = ''
                 row['LinkedIn'] = ''
                 row['Instagram'] = ''
+                row['WhatsApp'] = ''
                 return row
                 
             logger.info(f"Processing URL: {url}")
@@ -237,6 +251,7 @@ class CSVProcessor:
                 row['Phone'] = ''
                 row['LinkedIn'] = ''
                 row['Instagram'] = ''
+                row['WhatsApp'] = ''
                 return row
                 
             # Website is accessible, scrape for information
@@ -252,8 +267,9 @@ class CSVProcessor:
             row['Phone'] = '; '.join(scrape_results['phone']) if scrape_results['phone'] else ''
             row['LinkedIn'] = '; '.join(scrape_results['linkedin']) if scrape_results['linkedin'] else ''
             row['Instagram'] = '; '.join(scrape_results['instagram']) if scrape_results['instagram'] else ''
+            row['WhatsApp'] = '; '.join(scrape_results['whatsapp']) if scrape_results['whatsapp'] else ''
             
-            logger.info(f"Processed {url}: Email={row['Email']}, Phone={row['Phone']}, LinkedIn={row['LinkedIn']}, Instagram={row['Instagram']}")
+            logger.info(f"Processed {url}: Email={row['Email']}, Phone={row['Phone']}, LinkedIn={row['LinkedIn']}, Instagram={row['Instagram']}, WhatsApp={row['WhatsApp']}")
             
             return row
             
@@ -265,6 +281,7 @@ class CSVProcessor:
             row['Phone'] = ''
             row['LinkedIn'] = ''
             row['Instagram'] = ''
+            row['WhatsApp'] = ''
             return row
             
     def process_csv(self):
@@ -312,7 +329,7 @@ class CSVProcessor:
                 return False
                 
             # Add required output columns if they don't exist
-            required_columns = ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram']
+            required_columns = ['Status', 'Error', 'Email', 'Phone', 'LinkedIn', 'Instagram', 'WhatsApp']
             for col in required_columns:
                 if col not in fieldnames:
                     fieldnames.append(col)

@@ -10,7 +10,7 @@ A Python utility for scanning websites and extracting contact information from C
 ## Features
 
 - Website status checking (working/not working)
-- Extracts emails, phone numbers, LinkedIn links, and Instagram links
+- Extracts emails, phone numbers, LinkedIn links, Instagram links, and WhatsApp links
 - Processes large CSV files efficiently using multithreading
 - Detailed logging for troubleshooting
 
@@ -51,6 +51,7 @@ The script adds the following columns to your CSV:
 - Phone: Extracted phone numbers
 - LinkedIn: LinkedIn profile links
 - Instagram: Instagram profile links
+- WhatsApp: WhatsApp links
 
 ## How can I edit this code?
 
