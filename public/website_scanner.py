@@ -222,14 +222,16 @@ class CSVProcessor:
         """Find the column containing website URLs"""
         possible_names = ['website url', 'website_url', 'websiteurl', 'url', 'website', 'domain', 'site']
         
-        # First try exact match
+        # First try exact match (case-insensitive)
         for name in fieldnames:
-            if name.lower() in possible_names:
+            if name and name.lower() in possible_names:
                 logger.info(f"Found URL column: {name}")
                 return name
                 
         # Try partial match
         for name in fieldnames:
+            if not name:
+                continue
             for possible in possible_names:
                 if possible in name.lower():
                     logger.info(f"Found URL column (partial match): {name}")
